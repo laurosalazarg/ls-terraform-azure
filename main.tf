@@ -1,8 +1,8 @@
 # --------------------------------------------------------------------------------- #
-#
-#
-# 
-#
+# Terraform to create Infrastructure, create K8 cluster, and deploy the application #
+# --------------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------------- #
+# Created by: Lauro Salazar                                                         #
 # --------------------------------------------------------------------------------- #
 terraform {
     required_providers {
@@ -22,7 +22,7 @@ terraform {
     features {}
 }
 # --------------------------------------------------------
-# - Pre-Req
+# - Pre-Req 
 #---------------------------------------------------------
 resource "azurerm_resource_group" "rg" {
     name     = "${var.az_prefix}rg"
@@ -34,10 +34,20 @@ resource "azurerm_resource_group" "rg" {
 }
 
 data "azuread_client_config" "current" {}
-data "azurerm_client_config" "current" {}
+
 data "azuread_user" "current" {
     object_id   = data.azuread_client_config.current.object_id
 }
+resource "azuread_group" "ad_devops_gp" {
+    display_name     = "DevOps"
+    owners           = [data.azuread_client_config.current.object_id]
+    security_enabled = true
+
+    members = [
+        data.azuread_user.current.object_id
+    ]
+}
+data "azurerm_client_config" "current" {}
 resource "azuread_application" "az_application" {
     display_name = "DevOps"
     owners       = [data.azuread_client_config.current.object_id]

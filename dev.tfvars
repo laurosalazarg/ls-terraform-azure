@@ -1,0 +1,12 @@
+az_prefix = "dv_aztf_slzrcloud_"
+prefix = "dv0aztf0slzr0cloud0"
+dns_names = ["slzr.cloud", "*.slzr.cloud"]
+azurelocation = "eastus"
+managed = "true"
+level = "dev"
+address_space = ["10.20.0.0/16"]
+subnet_workers  = ["10.20.0.0/24"]
+subnet_vip = ["10.20.1.0/24"]
+subnet_appgw = ["10.20.2.0/24"]
+subnet_lb = ["10.20.3.0/24"]
+certname = "self-imported-cert-03"
