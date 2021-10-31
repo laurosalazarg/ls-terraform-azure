@@ -36,5 +36,5 @@ variable "subnet_lb" {
   default = ["10.20.3.0/24"]
 }
 variable "certname"{
-  default = "self-imported-cert-02"
+  default = "self-imported-cert-03"
 }

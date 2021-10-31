@@ -208,7 +208,7 @@ resource "azurerm_container_registry" "registry" {
     resource_group_name = azurerm_resource_group.rg.name
     location            = azurerm_resource_group.rg.location
     sku                 = "Standard"
-
+    admin_enabled       = true
     depends_on = [azurerm_resource_group.rg]
 }
 # --------------------------------------------------------
