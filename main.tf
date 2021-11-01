@@ -2,7 +2,8 @@
 # Terraform to create Infrastructure, create K8 cluster, and deploy the application #
 # --------------------------------------------------------------------------------- #
 # --------------------------------------------------------------------------------- #
-# Created by: Lauro Salazar                                                         #
+# Created by:    Lauro Salazar                                                      #      
+# Last Modified: 10/31/2021                                                         #
 # --------------------------------------------------------------------------------- #
 terraform {
     required_providers {
@@ -75,9 +76,23 @@ resource "azuread_application_certificate" "az_app_cert" {
 resource "azuread_application_password" "az_app_pwd" {
     application_object_id = azuread_application.az_application.object_id
 }
+
+# --------------------------------------------------------
+# - SSH keys 
+#---------------------------------------------------------
+
+data "local_file" "public_key" {
+    filename = var.public_ssh_key
+}
+data "local_file" "private_key" {
+    filename = var.private_ssh_key
+}
+
 # --------------------------------------------------------
 # - Azure Vault
 #---------------------------------------------------------
+resource "random_uuid" "randomuuid" {}
+
 resource "azurerm_key_vault" "vault" {
     name                        = "dv-aztf-slzrcloud-vault"
     location                    = azurerm_resource_group.rg.location
@@ -158,52 +173,14 @@ resource "azurerm_key_vault" "vault" {
 
     depends_on = [ azurerm_resource_group.rg]
 }
-resource "azurerm_key_vault_certificate" "vault_cert" {
-    name         = "${var.certname}"
-    key_vault_id = azurerm_key_vault.vault.id
-
-    certificate {
-    contents = filebase64("../certificates/secret.pfx")
-    password = ""
-    }
-
-    certificate_policy {
-    issuer_parameters {
-        name = "Self"
-    }
-
-    key_properties {
-        exportable = true
-        key_size   = 4096
-        key_type   = "RSA"
-        reuse_key  = false
-    }
-
-    secret_properties {
-        content_type = "application/x-pkcs12"
-    }
-
-    x509_certificate_properties {
-        key_usage = [
-            "cRLSign",
-            "dataEncipherment",
-            "digitalSignature",
-            "keyAgreement",
-            "keyCertSign",
-            "keyEncipherment",
-        ]
-
-        subject              = "CN=${var.dns_names[0]}"
-        validity_in_months   = 12
-        subject_alternative_names {
-            dns_names = ["${var.dns_names[0]}","${var.dns_names[1]}"]
-        }
-    }
-    }
+resource "azurerm_key_vault_secret" "vault_key" {
+    name         = "${random_uuid.randomuuid.result}"
+    key_vault_id = azurerm_key_vault.vault.id 
+    value = base64encode(data.local_file.public_key.content)
     depends_on = [azurerm_key_vault.vault, azurerm_resource_group.rg]
 } 
 resource "azurerm_key_vault_secret" "vault_secret" {
-    name         = "secret"
+    name         = "${random_uuid.randomuuid.result}"
     value        = "szechuan"
     key_vault_id = azurerm_key_vault.vault.id
 
@@ -303,5 +280,66 @@ resource "azurerm_subnet" "lb" {
     address_prefixes     = "${var.subnet_lb}"
     depends_on           = [azurerm_virtual_network.vnet]
 }
+# --------------------------------------------------------
+# - Kubernetes
+#---------------------------------------------------------
+resource "azurerm_kubernetes_cluster" "k8" {
+    name                = format("%s-%s", "K8-cluster", var.prefix_k8s)
+    location            = data.azurerm_resource_group.vnet.location
+    resource_group_name = data.azurerm_resource_group.vnet.name
+    dns_prefix          = "${var.prefix}-k8s"
+    kubernetes_version  = "1.22.2"
+    api_server_authorized_ip_ranges = var.auth_ip
+    private_cluster_enabled = true
 
 
+    default_node_pool  {
+        name           = "workload"
+        node_count     = 1
+        min_count      = 1
+        max_count      = 2
+        vm_size        = "Standard_DS2_v2"
+        vnet_subnet_id = azurerm_subnet.workers.id
+        os_disk_size_gb = 30
+        type = "VirtualMachineScaleSets"
+        enable_auto_scaling = "true"
+        max_pods = 30
+    }
+    linux_profile {
+        admin_username = "devops"
+        ssh_key {
+            key_data = file(var.public_ssh_key)
+        }
+    }
+    
+    
+    network_profile {
+        network_plugin = "azure"
+        network_policy = "azure" 
+    }
+
+    identity {
+        type = "SystemAssigned"
+    }
+
+    addon_profile {
+            
+        aci_connector_linux {
+            enabled = false
+        }
+
+        azure_policy {
+            enabled = false
+        }
+
+        http_application_routing {
+            enabled = false
+        }
+
+        oms_agent {
+            enabled = false
+        }
+    }
+
+    depends_on = [azuread_service_principal.az_servicePrincipal,azuread_service_principal_certificate.az_sp_cert,azuread_service_principal_password.az_sp_pwd,azurerm_key_vault_secret.vault_key,azurerm_resource_group.rg,azurerm_container_registry.registry, azurerm_network_security_group.internal_nsg, azurerm_network_security_group.dmz_nsg,azurerm_subnet.workers, azurerm_subnet.vip, azurerm_subnet.appgw, azurerm_subnet.lb]
+}
