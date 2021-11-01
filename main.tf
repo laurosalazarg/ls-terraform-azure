@@ -77,6 +77,19 @@ resource "azuread_application_password" "az_app_pwd" {
     application_object_id = azuread_application.az_application.object_id
 }
 
+resource "azurerm_proximity_placement_group" "pg" {
+    name                = "${var.az_prefix}pg"
+    location            = azurerm_resource_group.rg.location
+    resource_group_name = azurerm_resource_group.rg.name
+
+    tags = {
+    terraform   = "${var.managed}"
+    environment = "${var.level}"
+    }
+}
+
+
+
 # --------------------------------------------------------
 # - SSH keys 
 #---------------------------------------------------------
@@ -176,7 +189,7 @@ resource "azurerm_key_vault" "vault" {
 resource "azurerm_key_vault_secret" "vault_key" {
     name         = "${random_uuid.randomuuid.result}"
     key_vault_id = azurerm_key_vault.vault.id 
-    value = base64encode(data.local_file.public_key.content)
+    value = data.local_file.public_key.content
     depends_on = [azurerm_key_vault.vault, azurerm_resource_group.rg]
 } 
 resource "azurerm_key_vault_secret" "vault_secret" {
@@ -290,7 +303,6 @@ resource "azurerm_kubernetes_cluster" "k8" {
     dns_prefix          = "${var.prefix}-k8s"
     kubernetes_version  = "1.22.2"
     api_server_authorized_ip_ranges = var.auth_ip
-    private_cluster_enabled = true
 
 
     default_node_pool  {
